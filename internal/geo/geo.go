@@ -79,6 +79,81 @@ func (p Polyline) PointAt(d float64) Point {
 	return p.pts[len(p.pts)-1]
 }
 
+// ProjectSide is like Project and also reports which side of the direction
+// of travel q lies on: +1 right, -1 left, 0 on the line (within 0.5 m).
+func (p Polyline) ProjectSide(q Point) (alongM, offsetM float64, side int) {
+	best := math.Inf(1)
+	for i := 1; i < len(p.pts); i++ {
+		a, b := p.pts[i-1], p.pts[i]
+		kx := math.Cos(rad(a.Lat)) * earthRadiusM * math.Pi / 180
+		ky := earthRadiusM * math.Pi / 180
+		bx, by := (b.Lon-a.Lon)*kx, (b.Lat-a.Lat)*ky
+		qx, qy := (q.Lon-a.Lon)*kx, (q.Lat-a.Lat)*ky
+		t := 0.0
+		if l2 := bx*bx + by*by; l2 > 0 {
+			t = math.Max(0, math.Min(1, (qx*bx+qy*by)/l2))
+		}
+		dx, dy := qx-t*bx, qy-t*by
+		if off := math.Hypot(dx, dy); off < best {
+			best = off
+			alongM = p.cum[i-1] + t*(p.cum[i]-p.cum[i-1])
+			// x = east, y = north: a negative cross product means q is to the right.
+			switch cross := bx*qy - by*qx; {
+			case off < 0.5:
+				side = 0
+			case cross < 0:
+				side = 1
+			default:
+				side = -1
+			}
+		}
+	}
+	return alongM, best, side
+}
+
+// Simplify reduces a dense path with the Douglas-Peucker algorithm, keeping
+// every point that deviates more than tolM metres from the simplified line.
+func Simplify(pts []Point, tolM float64) []Point {
+	if len(pts) < 3 {
+		return append([]Point(nil), pts...)
+	}
+	keep := make([]bool, len(pts))
+	keep[0], keep[len(pts)-1] = true, true
+	type span struct{ i, j int }
+	stack := []span{{0, len(pts) - 1}}
+	for len(stack) > 0 {
+		s := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if s.j-s.i < 2 {
+			continue
+		}
+		seg, _ := NewPolyline([]Point{pts[s.i], pts[s.j]})
+		maxD, maxK := -1.0, -1
+		for k := s.i + 1; k < s.j; k++ {
+			var d float64
+			if seg.LengthM() == 0 {
+				d = DistanceM(pts[s.i], pts[k])
+			} else {
+				_, d = seg.Project(pts[k])
+			}
+			if d > maxD {
+				maxD, maxK = d, k
+			}
+		}
+		if maxD > tolM {
+			keep[maxK] = true
+			stack = append(stack, span{s.i, maxK}, span{maxK, s.j})
+		}
+	}
+	out := make([]Point, 0, len(pts)/4)
+	for i, k := range keep {
+		if k {
+			out = append(out, pts[i])
+		}
+	}
+	return out
+}
+
 // Project finds the closest point on the path to q. It returns the distance
 // along the path to that point and the perpendicular offset from q, in metres.
 // Uses a local equirectangular approximation, accurate at city scale.

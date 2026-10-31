@@ -18,27 +18,31 @@ func NewPGStore(pool *pgxpool.Pool) *PGStore { return &PGStore{pool: pool} }
 
 func (s *PGStore) ListRoutes(ctx context.Context) ([]Route, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, route_number, name, is_simulated
+		SELECT id, route_number, name, is_simulated, data_source
 		FROM routes
 		WHERE active
-		ORDER BY route_number`)
+		ORDER BY `+RouteNumberOrder)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Route, error) {
 		var rt Route
-		err := r.Scan(&rt.ID, &rt.RouteNumber, &rt.Name, &rt.IsSimulated)
+		err := r.Scan(&rt.ID, &rt.RouteNumber, &rt.Name, &rt.IsSimulated, &rt.DataSource)
 		return rt, err
 	})
 }
 
+// RouteNumberOrder sorts route numbers naturally: 2, 3, 5, 7A, 14, 62, M1.
+const RouteNumberOrder = `NULLIF(substring(route_number from '^[0-9]+'), '')::int NULLS LAST, route_number`
+
 func (s *PGStore) GetRoute(ctx context.Context, id string) (Route, error) {
 	var rt Route
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, route_number, name, is_simulated, geometry
+		SELECT id, route_number, name, is_simulated, data_source, geometry,
+		       COALESCE(geometry_return, '[]'::jsonb)
 		FROM routes
 		WHERE id = $1 AND active`, id,
-	).Scan(&rt.ID, &rt.RouteNumber, &rt.Name, &rt.IsSimulated, &rt.Geometry)
+	).Scan(&rt.ID, &rt.RouteNumber, &rt.Name, &rt.IsSimulated, &rt.DataSource, &rt.Geometry, &rt.GeometryReturn)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Route{}, ErrNotFound
 	}
@@ -96,6 +100,21 @@ func (s *PGStore) ActiveTripForVehicle(ctx context.Context, vehicleID string) (T
 		return Trip{}, false, nil
 	}
 	return t, err == nil, err
+}
+
+// ListDataSources returns imported dataset provenance for attribution.
+func (s *PGStore) ListDataSources(ctx context.Context) ([]DataSource, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, title, publisher, url, license, retrieved_at, records, notes
+		FROM data_sources ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (DataSource, error) {
+		var d DataSource
+		err := r.Scan(&d.ID, &d.Title, &d.Publisher, &d.URL, &d.License, &d.RetrievedAt, &d.Records, &d.Notes)
+		return d, err
+	})
 }
 
 // ActiveRouteIDs lists IDs of all active routes.

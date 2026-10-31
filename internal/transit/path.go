@@ -34,18 +34,23 @@ func (p Path) StopIndex(stopID string) int {
 	return -1
 }
 
-// BuildPath creates the path for one direction. Direction 1 is the route
-// geometry reversed. Stops must be given in travel order.
+// BuildPath creates the path for one direction. Direction 1 uses the route's
+// own return geometry when present, otherwise direction 0 reversed. Stops must
+// be given in travel order.
 func BuildPath(route Route, stops []RouteStop, direction int) (Path, error) {
-	pts := make([]geo.Point, len(route.Geometry))
-	for i, ll := range route.Geometry {
+	src, reverse := route.Geometry, direction == 1
+	if direction == 1 && len(route.GeometryReturn) >= 2 {
+		src, reverse = route.GeometryReturn, false
+	}
+	pts := make([]geo.Point, len(src))
+	for i, ll := range src {
 		pts[i] = geo.Point{Lat: ll[0], Lon: ll[1]}
 	}
 	line, err := geo.NewPolyline(pts)
 	if err != nil {
 		return Path{}, fmt.Errorf("route %s geometry: %w", route.ID, err)
 	}
-	if direction == 1 {
+	if reverse {
 		line = line.Reversed()
 	}
 	p := Path{RouteID: route.ID, Direction: direction, Line: line, Stops: make([]PathStop, len(stops))}

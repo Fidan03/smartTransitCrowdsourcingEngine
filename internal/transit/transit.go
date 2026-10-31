@@ -14,11 +14,27 @@ var ErrNotFound = errors.New("not found")
 type LatLon [2]float64
 
 type Route struct {
-	ID          string   `json:"id"`
-	RouteNumber string   `json:"route_number"`
-	Name        string   `json:"name"`
-	IsSimulated bool     `json:"is_simulated"`
-	Geometry    []LatLon `json:"geometry,omitempty"`
+	ID          string `json:"id"`
+	RouteNumber string `json:"route_number"`
+	Name        string `json:"name"`
+	IsSimulated bool   `json:"is_simulated"` // true for fictional demo routes
+	DataSource  string `json:"data_source"`  // "demo" or "opendata.az"
+	// Geometry is the direction-0 path. GeometryReturn is the direction-1 path
+	// when it differs (real routes); empty means "direction 0 reversed".
+	Geometry       []LatLon `json:"geometry,omitempty"`
+	GeometryReturn []LatLon `json:"geometry_return,omitempty"`
+}
+
+// DataSource records provenance and attribution for imported open data.
+type DataSource struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Publisher   string    `json:"publisher"`
+	URL         string    `json:"url"`
+	License     string    `json:"license"`
+	RetrievedAt time.Time `json:"retrieved_at"`
+	Records     int       `json:"records"`
+	Notes       string    `json:"notes"`
 }
 
 type Stop struct {
