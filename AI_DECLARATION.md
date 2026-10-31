@@ -5,9 +5,7 @@ Project:     Smart Transit & Crowdsourcing Engine (smartTransitCrowdsourcingEngi
 Repository:  https://github.com/Fidan03/smartTransitCrowdsourcingEngine
 Version:     1.0
 Date:        31 October 2026
-Team:        [Team member names]
-Course:      [Course / programme name]
-Supervisor:  [Supervisor name]
+Team:        Team 14
 
 
 1. DECLARATION
@@ -36,8 +34,6 @@ it may contain.
                   commands (Go, PostgreSQL, Git), search the web, and download
                   public open data.
 
-No other AI tools were used for this project, unless listed here by the team:
-  [none / list other tools]
 
 
 3. WHAT THE TEAM DID (HUMAN CONTRIBUTIONS)
@@ -197,15 +193,3 @@ validation with real operational data (plan sections 6 and 7).
     golang.org/x/crypto (BSD-3-Clause). Map tiles: (c) OpenStreetMap
     contributors.
 
-
-9. CONFIRMATION
----------------
-
-By signing below, each team member confirms that this declaration accurately
-describes how AI was used in this project.
-
-  Name: ______________________   Signature: ______________   Date: __________
-
-  Name: ______________________   Signature: ______________   Date: __________
-
-  Name: ______________________   Signature: ______________   Date: __________
