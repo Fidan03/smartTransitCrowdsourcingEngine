@@ -4,6 +4,12 @@
 public-transit crowding and helping operators respond to sustained congestion.
 See [plan.md](plan.md) for the full design.
 
+**Documents:**
+[Technical documentation (Word)](docs/Smart_Transit_Technical_Documentation.docx)
+covers the architecture, technologies, algorithms, testing, problems solved and
+future improvements. The [AI usage declaration](AI_DECLARATION.md) explains how
+AI assistance was used in this project.
+
 > **What is real and what is simulated:** after running the importer, routes,
 > stops and ridership are **real open data from [opendata.az](https://opendata.az)**
 > (AYNA and BakuBus). **Bus positions are always simulated**, because no live
