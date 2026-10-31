@@ -92,14 +92,18 @@ function renderRouteTable(rows, d) {
       el("span", { class: `crowd-badge small ${r.crowd_status}` }, r.crowd_status),
       r.high_since ? el("div", { class: "small muted" }, `HIGH since ${clockTime(r.high_since)}`) : null,
       r.open_alert_status ? el("div", { class: "small danger-text" }, `Alert ${r.open_alert_status.toLowerCase()}`) : null),
+    el("td", {}, r.expected ? expectedBadge(r.expected.level) : el("span", { class: "muted" }, "–")),
     el("td", {}, `${r.valid_report_count}`, el("br"), el("small", { class: "muted" }, `${r.low_count} / ${r.medium_count} / ${r.high_count}`)),
+    el("td", {}, r.ridership ? r.ridership.avg_daily_trips.toLocaleString() : "–",
+      r.ridership ? el("div", { class: "small muted" }, `last: ${r.ridership.last_day_trips.toLocaleString()} (${r.ridership.last_day})`) : null),
     el("td", {}, ago(r.last_report_at)),
     el("td", {}, ago(r.last_gps_update)),
     el("td", {}, ago(r.last_analytics_update)),
     el("td", {}, `${r.vehicles_with_recent_gps} / ${r.active_trips}`))));
   $("route-note").textContent =
-    `Status uses the last ${d.analytics_window_minutes} min of passenger reports (one per passenger). ` +
+    `Live crowding uses the last ${d.analytics_window_minutes} min of passenger reports (one per passenger) and is the only input to alerts. ` +
     `UNKNOWN means too few reports, which is not the same as low crowding. ` +
+    `"Expected now" is an estimate from historical BakuBus ridership and an assumed hourly pattern; it never creates alerts. ` +
     `Buses count as having recent GPS if updated in the last ${d.stale_after_seconds}s.`;
 }
 
@@ -204,4 +208,5 @@ document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () 
   refresh();
 }));
 
+loadSources();
 api("/api/v1/auth/me").then(showDashboard).catch(() => showLogin());

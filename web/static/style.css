@@ -37,6 +37,18 @@ main { display: grid; grid-template-columns: 1fr 420px; height: calc(100vh - 100
 .crowd-badge.HIGH { background: #f8d7da; color: #842029; }
 .crowd-badge.UNKNOWN { background: #e2e3e5; color: #41464b; }
 
+/* Expected (estimated) crowding: dashed outline so it never looks like live data. */
+.crowd-badge.expected { background: transparent; border: 2px dashed currentColor; font-weight: 600; }
+.crowd-badge.expected.LOW { color: #0f5132; }
+.crowd-badge.expected.MEDIUM { color: #8a6d00; }
+.crowd-badge.expected.HIGH { color: #842029; }
+.expected-box { margin-top: 10px; }
+.expected-box.prominent { background: #f8f9fb; border: 1px dashed #c9ced6; border-radius: 6px; padding: 8px 10px; }
+.expected-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.sources { padding: 8px 4px 16px; line-height: 1.4; }
+.sources a { color: #3b6fd8; }
+.dash > .sources { padding: 16px 0 0; }
+
 .arrivals { list-style: none; margin: 0; padding: 0; }
 .arrival { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eef0f3; }
 .arrival:last-child { border-bottom: none; }

@@ -205,6 +205,31 @@ async function refreshCrowd() {
     ? `${CROWD_TEXT.UNKNOWN} (need ${s.min_reports}).`
     : CROWD_TEXT[s.status] + ".";
   $("crowd-detail").replaceChildren(detail, el("br"), el("small", {}, evidence));
+  renderExpected(s);
+}
+
+// Expected crowding: an estimate from historical ridership. Prominent when
+// there is no live evidence; a small "usually" hint otherwise. Never replaces
+// the live status and never affects alerts.
+function renderExpected(s) {
+  const box = $("crowd-expected");
+  const e = s.expected;
+  if (!e) { box.hidden = true; return; }
+  box.hidden = false;
+  const hour = `${String(e.local_hour).padStart(2, "0")}:00`;
+  const typical = `typical ${e.weekday}: ~${e.typical_daily_trips.toLocaleString()} trips/day on this route`;
+  if (s.status === "UNKNOWN") {
+    box.className = "expected-box prominent";
+    box.replaceChildren(
+      el("div", { class: "expected-row" }, el("strong", {}, "Expected now: "), expectedBadge(e.level)),
+      el("small", { class: "muted" },
+        `Around ${hour}, ${typical}. Estimate from historical BakuBus ridership, not a live report. `,
+        "Report below to give the live picture."));
+  } else {
+    box.className = "expected-box";
+    box.replaceChildren(el("small", { class: "muted" },
+      "Usually at this time: ", expectedBadge(e.level), ` (${typical}; estimate)`));
+  }
 }
 
 async function submitReport(level) {
@@ -235,4 +260,5 @@ async function submitReport(level) {
   }
 }
 
+loadSources();
 init().catch((err) => { $("status").textContent = `Could not load routes: ${err.message}`; });

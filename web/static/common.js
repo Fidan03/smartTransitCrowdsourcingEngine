@@ -73,6 +73,37 @@ function baseMap(elementId) {
   return map;
 }
 
+// Data provenance: banner wording and attribution footer (CC BY requires credit).
+async function loadSources() {
+  let sources = [];
+  try { sources = await api("/api/v1/data-sources"); } catch { /* optional */ }
+  const text = document.getElementById("demo-banner-text");
+  if (text && sources.length) {
+    text.textContent = "Routes, stops and ridership: real open data from opendata.az. " +
+      "Bus positions: SIMULATED (no live GPS feed is published).";
+  }
+  const footer = document.getElementById("sources");
+  if (!footer) return sources;
+  if (!sources.length) {
+    footer.replaceChildren("Demo data: fictional routes and simulated buses.");
+    return sources;
+  }
+  footer.replaceChildren(
+    el("strong", {}, "Data sources: "),
+    ...sources.flatMap((s, i) => [
+      i ? " · " : "",
+      el("a", { href: s.url, target: "_blank", rel: "noopener" }, s.title),
+      ` (${s.publisher}; ${s.license}; retrieved ${new Date(s.retrieved_at).toLocaleDateString()})`,
+    ]),
+    el("br"),
+    "Stop-to-route assignment is inferred from locations. Expected crowding is an estimate from historical ridership, not a live measurement.");
+  return sources;
+}
+
+function expectedBadge(level) {
+  return el("span", { class: `crowd-badge small expected ${level}` }, `likely ${level}`);
+}
+
 function busStyle(freshness) {
   return freshness === "FRESH"
     ? { radius: 9, color: "#0f5132", fillColor: "#20c06b", fillOpacity: 0.95, weight: 2, dashArray: null }
