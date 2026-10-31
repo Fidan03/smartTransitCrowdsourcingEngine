@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"smart-transit/internal/alerts"
+	"smart-transit/internal/demand"
+	"smart-transit/internal/operator"
 )
 
 func (h *handlers) operatorDashboard(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +32,13 @@ func (h *handlers) operatorDashboard(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, d)
 }
 
+// operatorRouteRow adds display-only demand context to the live route row.
+type operatorRouteRow struct {
+	operator.RouteRow
+	Expected  *demand.Estimate `json:"expected"`  // estimate; never drives alerts
+	Ridership *demand.Summary  `json:"ridership"` // historical BakuBus trips
+}
+
 func (h *handlers) operatorRoutes(w http.ResponseWriter, r *http.Request) {
 	now := h.deps.Clock.Now()
 	routes, err := h.deps.Operator.Routes(r.Context(), now.Add(-h.deps.GPSStaleAfter), now.Add(-h.deps.GPSMaxAge))
@@ -37,7 +46,19 @@ func (h *handlers) operatorRoutes(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
-	writeData(w, http.StatusOK, routes)
+	out := make([]operatorRouteRow, len(routes))
+	for i, rt := range routes {
+		out[i].RouteRow = rt
+		if h.deps.Demand != nil {
+			if e, ok := h.deps.Demand.Estimate(rt.RouteNumber, now); ok {
+				out[i].Expected = &e
+			}
+			if s, ok := h.deps.Demand.Summary(rt.RouteNumber); ok {
+				out[i].Ridership = &s
+			}
+		}
+	}
+	writeData(w, http.StatusOK, out)
 }
 
 var validAlertStatus = map[string]bool{

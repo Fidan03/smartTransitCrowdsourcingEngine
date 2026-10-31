@@ -66,7 +66,8 @@ func (q *Queries) Routes(ctx context.Context, freshSince, maxAgeSince time.Time)
 		LEFT JOIN alerts a ON a.target_type = 'ROUTE' AND a.target_id = r.id
 		                  AND a.status IN ('ACTIVE', 'ACKNOWLEDGED')
 		WHERE r.active
-		ORDER BY r.route_number`, freshSince, maxAgeSince)
+		ORDER BY NULLIF(substring(r.route_number from '^[0-9]+'), '')::int NULLS LAST, r.route_number`,
+		freshSince, maxAgeSince)
 	if err != nil {
 		return nil, err
 	}

@@ -11,6 +11,7 @@ import (
 	"smart-transit/internal/auth"
 	"smart-transit/internal/clock"
 	"smart-transit/internal/crowd"
+	"smart-transit/internal/demand"
 	"smart-transit/internal/eta"
 	"smart-transit/internal/gps"
 	"smart-transit/internal/operator"
@@ -61,6 +62,17 @@ type Limiter interface {
 	Allow(key string) (bool, time.Duration)
 }
 
+// DemandEstimator gives expected crowding from historical ridership. Its
+// output is display-only: it never feeds crowd status or alerts.
+type DemandEstimator interface {
+	Estimate(routeNumber string, now time.Time) (demand.Estimate, bool)
+	Summary(routeNumber string) (demand.Summary, bool)
+}
+
+type DataSourceLister interface {
+	ListDataSources(ctx context.Context) ([]transit.DataSource, error)
+}
+
 type Deps struct {
 	Transit   transit.Store
 	Vehicles  VehicleQuerier
@@ -72,6 +84,8 @@ type Deps struct {
 	Auth      Authenticator
 	Alerts    AlertManager
 	Operator  OperatorQueries
+	Demand    DemandEstimator  // optional
+	Sources   DataSourceLister // optional
 	Clock     clock.Clock
 	Simulated bool // true while GPS data comes from the simulator
 
@@ -108,6 +122,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/v1/routes/{id}/crowd-status", h.routeCrowdStatus)
 	mux.HandleFunc("GET /api/v1/stops/{id}/arrivals", h.stopArrivals)
 	mux.HandleFunc("POST /api/v1/crowd-reports", h.limit(d.ReportLimiter, h.submitCrowdReport))
+	mux.HandleFunc("GET /api/v1/data-sources", h.listDataSources)
 
 	// Operator authentication.
 	mux.HandleFunc("POST /api/v1/auth/login", h.limit(d.LoginLimiter, h.login))

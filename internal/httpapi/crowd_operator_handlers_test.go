@@ -13,6 +13,7 @@ import (
 	"smart-transit/internal/auth"
 	"smart-transit/internal/clock"
 	"smart-transit/internal/crowd"
+	"smart-transit/internal/demand"
 	"smart-transit/internal/transit"
 )
 
@@ -156,6 +157,62 @@ func TestSubmitCrowdReportErrors(t *testing.T) {
 				t.Errorf("Retry-After = %q", rec.Header().Get("Retry-After"))
 			}
 		})
+	}
+}
+
+type fakeCrowdRead struct{ st crowd.RouteStatus }
+
+func (f fakeCrowdRead) GetRouteStatus(context.Context, string) (crowd.RouteStatus, error) {
+	return f.st, nil
+}
+
+type fakeDemand struct{ gotRoute string }
+
+func (f *fakeDemand) Estimate(routeNumber string, _ time.Time) (demand.Estimate, bool) {
+	f.gotRoute = routeNumber
+	if routeNumber == "D1" {
+		return demand.Estimate{Level: demand.High, IsEstimate: true, TypicalDailyTrips: 21000}, true
+	}
+	return demand.Estimate{}, false
+}
+func (f *fakeDemand) Summary(string) (demand.Summary, bool) { return demand.Summary{}, false }
+
+func TestCrowdStatusIncludesEstimateWithoutChangingLiveStatus(t *testing.T) {
+	fd := &fakeDemand{}
+	h := NewRouter(Deps{
+		Transit:   &fakeTransit{routes: []transit.Route{{ID: "route_d1", RouteNumber: "D1"}, {ID: "route_x", RouteNumber: "X"}}},
+		CrowdRead: fakeCrowdRead{st: crowd.RouteStatus{RouteID: "route_d1", Status: crowd.StatusUnknown, ValidCount: 1}},
+		CrowdRule: crowd.DefaultRule,
+		Demand:    fd,
+		Clock:     clock.NewFake(testNow),
+	})
+	rec := send(t, h, http.MethodGet, "/api/v1/routes/route_d1/crowd-status", "", "", nil)
+	var body struct {
+		Data struct {
+			Status   string `json:"status"`
+			Expected *struct {
+				Level      string `json:"level"`
+				IsEstimate bool   `json:"is_estimate"`
+			} `json:"expected"`
+		}
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Data.Status != "UNKNOWN" {
+		t.Errorf("live status must stay UNKNOWN, got %s", body.Data.Status)
+	}
+	if body.Data.Expected == nil || body.Data.Expected.Level != "HIGH" || !body.Data.Expected.IsEstimate {
+		t.Errorf("expected estimate missing: %+v", body.Data.Expected)
+	}
+	if fd.gotRoute != "D1" {
+		t.Errorf("estimate must be looked up by public route number, got %q", fd.gotRoute)
+	}
+
+	// No ridership data for the route: expected is null, never a made-up LOW.
+	rec = send(t, h, http.MethodGet, "/api/v1/routes/route_x/crowd-status", "", "", nil)
+	if !strings.Contains(rec.Body.String(), `"expected":null`) {
+		t.Errorf("expected null estimate, got %s", rec.Body)
 	}
 }
 

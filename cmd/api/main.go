@@ -18,6 +18,7 @@ import (
 	"smart-transit/internal/config"
 	"smart-transit/internal/crowd"
 	"smart-transit/internal/database"
+	"smart-transit/internal/demand"
 	"smart-transit/internal/eta"
 	"smart-transit/internal/gps"
 	"smart-transit/internal/gps/simulator"
@@ -93,6 +94,12 @@ func run(log *slog.Logger) error {
 	crowdStore := crowd.NewPGStore(pool)
 	crowdSvc := crowd.NewService(crowdStore, transitStore, engine, clk, log, cfg.ReportDupInterval)
 	lifecycle := alerts.NewLifecycle(pool, clk)
+
+	// Expected-crowding estimate from historical ridership (display only).
+	demandSvc := demand.NewService(pool)
+	if err := demandSvc.Reload(ctx); err != nil {
+		return err
+	}
 	authSvc := auth.NewService(pool, clk, log, 12*time.Hour)
 
 	if cfg.OperatorEmail != "" {
@@ -115,6 +122,23 @@ func run(log *slog.Logger) error {
 	go func() {
 		defer wg.Done()
 		engine.Run(workerCtx, cfg.CrowdEvalInterval)
+	}()
+
+	wg.Add(1)
+	go func() { // pick up re-imported ridership without a restart
+		defer wg.Done()
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-t.C:
+				if err := demandSvc.Reload(workerCtx); err != nil && workerCtx.Err() == nil {
+					log.Error("reload ridership model", "err", err)
+				}
+			}
+		}
 	}()
 
 	if cfg.SimulatorEnabled {
@@ -141,6 +165,8 @@ func run(log *slog.Logger) error {
 			Auth:            authSvc,
 			Alerts:          lifecycle,
 			Operator:        operator.NewQueries(pool),
+			Demand:          demandSvc,
+			Sources:         transitStore,
 			Clock:           clk,
 			Simulated:       cfg.SimulatorEnabled,
 			GPSStaleAfter:   cfg.GPSStaleAfter,

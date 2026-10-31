@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"smart-transit/internal/crowd"
+	"smart-transit/internal/demand"
 	"smart-transit/internal/transit"
 )
 
@@ -59,16 +60,20 @@ func (h *handlers) submitCrowdReport(w http.ResponseWriter, r *http.Request) {
 }
 
 type crowdStatusResponse struct {
-	crowd.RouteStatus
-	WindowMinutes float64 `json:"window_minutes"`
-	MinReports    int     `json:"min_reports"`
-	Threshold     float64 `json:"threshold"`
+	crowd.RouteStatus         // live status from passenger reports (drives alerts)
+	WindowMinutes     float64 `json:"window_minutes"`
+	MinReports        int     `json:"min_reports"`
+	Threshold         float64 `json:"threshold"`
+	// Expected is a display-only estimate from historical ridership, shown
+	// especially when the live status is UNKNOWN. Null if no ridership data.
+	Expected *demand.Estimate `json:"expected"`
 }
 
 // routeCrowdStatus returns the persisted status and its evidence (plan 7.4).
 func (h *handlers) routeCrowdStatus(w http.ResponseWriter, r *http.Request) {
 	routeID := r.PathValue("id")
-	if _, err := h.deps.Transit.GetRoute(r.Context(), routeID); errors.Is(err, transit.ErrNotFound) {
+	route, err := h.deps.Transit.GetRoute(r.Context(), routeID)
+	if errors.Is(err, transit.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "route_not_found", "route not found")
 		return
 	} else if err != nil {
@@ -80,10 +85,31 @@ func (h *handlers) routeCrowdStatus(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
-	writeData(w, http.StatusOK, crowdStatusResponse{
+	resp := crowdStatusResponse{
 		RouteStatus:   st,
 		WindowMinutes: h.deps.CrowdRule.Window.Minutes(),
 		MinReports:    h.deps.CrowdRule.MinReports,
 		Threshold:     h.deps.CrowdRule.Threshold,
-	})
+	}
+	if h.deps.Demand != nil {
+		if e, ok := h.deps.Demand.Estimate(route.RouteNumber, h.deps.Clock.Now()); ok {
+			resp.Expected = &e
+		}
+	}
+	writeData(w, http.StatusOK, resp)
+}
+
+func (h *handlers) listDataSources(w http.ResponseWriter, r *http.Request) {
+	list := []transit.DataSource{}
+	if h.deps.Sources != nil {
+		var err error
+		if list, err = h.deps.Sources.ListDataSources(r.Context()); err != nil {
+			writeInternal(w, r, err)
+			return
+		}
+		if list == nil {
+			list = []transit.DataSource{}
+		}
+	}
+	writeData(w, http.StatusOK, list)
 }
