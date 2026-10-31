@@ -44,32 +44,169 @@ Recommendation to EVALUATE an additional bus (never an automatic dispatch)
 | Frontend | Plain HTML/JS + Leaflet (bundled), served by the Go backend |
 | Live updates | Polling (3–5 s); WebSockets deferred, as the plan allows |
 
-## Requirements
+## Run locally
 
-- Go 1.27+
-- PostgreSQL 16+ (developed on 18), running locally on port 5432
+### Quick start (already set up)
 
-## Setup
+```powershell
+cd "path\to\smartTransitCrowdsourcingEngine"
+go build -o bin\smart-transit.exe ./cmd/api
+.\bin\smart-transit.exe
+```
 
-1. Create a database and user, e.g. `smart_transit` (and `smart_transit_test`
-   for integration tests).
-2. Copy `.env.example` to `.env` and fill in `DATABASE_URL`,
-   `REPORT_KEY_SECRET`, `OPERATOR_EMAIL`, `OPERATOR_PASSWORD`, and
-   `TEST_DATABASE_URL`.
-3. Build and run:
+Then open:
 
-   ```powershell
-   go build -o bin\smart-transit.exe ./cmd/api
-   .\bin\smart-transit.exe
-   ```
+| Page | URL |
+| --- | --- |
+| Passenger | <http://localhost:8080/> |
+| Operator dashboard | <http://localhost:8080/operator.html> (log in with `OPERATOR_EMAIL` / `OPERATOR_PASSWORD` from `.env`) |
+| Health check | <http://localhost:8080/healthz> |
 
-   On start the server applies migrations, loads the demo dataset into an
-   empty database (non-production only), creates the operator account if it
-   is missing, and starts the GPS simulator and the crowd/alert evaluator.
+Stop the server with **Ctrl + C**.
 
-4. Open <http://localhost:8080/> (passenger) and
-   <http://localhost:8080/operator.html> (log in with `OPERATOR_EMAIL` /
-   `OPERATOR_PASSWORD` from `.env`).
+> Always start the server **from the project folder**: it reads `.env` from
+> the current directory.
+
+### First-time setup (Windows)
+
+**Requirements:** Go 1.27+, PostgreSQL 16+ (developed on 18), Git, and
+internet access for the opendata.az import and the map background.
+
+**1. Install the tools** (skip any you already have):
+
+```powershell
+winget install --id GoLang.Go -e
+winget install --id PostgreSQL.PostgreSQL.18 -e   # the installer asks for a password for the "postgres" admin user
+winget install --id Git.Git -e
+```
+
+Open a **new** terminal afterwards so `go` and `git` are on the PATH, then
+check with `go version`.
+
+**2. Get the code:**
+
+```powershell
+git clone https://github.com/Fidan03/smartTransitCrowdsourcingEngine.git
+cd smartTransitCrowdsourcingEngine
+```
+
+**3. Create the database and app user.** The app uses its own user, not the
+`postgres` admin. Connect as `postgres`:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -h localhost
+```
+
+then run (choose your own password):
+
+```sql
+CREATE ROLE smart_transit LOGIN PASSWORD 'choose-a-strong-password';
+CREATE DATABASE smart_transit OWNER smart_transit;
+CREATE DATABASE smart_transit_test OWNER smart_transit;   -- only for integration tests
+\q
+```
+
+**4. Create `.env`** from the template:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+Fill in at least:
+
+| Variable | What to put |
+| --- | --- |
+| `DATABASE_URL` | `postgres://smart_transit:YOUR_PASSWORD@localhost:5432/smart_transit?sslmode=disable` |
+| `TEST_DATABASE_URL` | the same, but ending in `/smart_transit_test?sslmode=disable` |
+| `REPORT_KEY_SECRET` | a long random string (see below) |
+| `OPERATOR_EMAIL` | the email you will log in with, e.g. `operator@example.com` |
+| `OPERATOR_PASSWORD` | 12+ characters |
+
+A quick way to generate a random secret:
+
+```powershell
+-join ((48..57) + (65..90) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
+```
+
+`.env` is in `.gitignore`. **Never commit it.**
+
+**5. Load the real Baku data** (recommended; takes a few seconds):
+
+```powershell
+go run ./cmd/importer -replace
+```
+
+This downloads the AYNA and BakuBus datasets from opendata.az, builds the
+routes, and loads them. If you skip this step, the server starts with three
+fictional demo routes (D1–D3) instead.
+
+**6. Build and run:**
+
+```powershell
+go build -o bin\smart-transit.exe ./cmd/api
+.\bin\smart-transit.exe
+```
+
+On start the server:
+
+- applies database migrations;
+- loads the demo dataset if the database has no routes;
+- creates the operator account if it is missing;
+- starts the GPS simulator and the crowd/alert evaluator.
+
+You should see `server listening addr=:8080` and
+`simulator ready (SIMULATED DATA) buses=20`.
+
+**7. Open the pages** (URLs above). Buses start moving after a short layover
+at their first stop.
+
+### macOS / Linux
+
+The same steps work. Install with `brew install go postgresql@18` or your
+package manager. Run `psql -U postgres` to create the database, then:
+
+```bash
+cp .env.example .env
+go run ./cmd/importer -replace
+go build -o bin/smart-transit ./cmd/api && ./bin/smart-transit
+```
+
+### Everyday commands
+
+| Task | Command |
+| --- | --- |
+| Run without building an .exe | `go run ./cmd/api` |
+| Build and run | `go build -o bin\smart-transit.exe ./cmd/api; .\bin\smart-transit.exe` |
+| Run on another port | `$env:HTTP_ADDR=":8081"; .\bin\smart-transit.exe` |
+| Refresh the real data | `go run ./cmd/importer -replace`, then restart the server |
+| Import from local files | `go run ./cmd/importer -replace -kmz buslines.kmz -stops dayanacaqlar.csv -ridership bakubus_passenger-2026.csv` |
+| Quick alert demo (2-minute rule) | `$env:ALERT_SUSTAIN="2m"; .\bin\smart-transit.exe`, and in a second terminal `.\scripts\demo.ps1 -Minutes 3 -Recover` |
+| Run all tests | `go test ./... -p 1` |
+| Run unit tests only (no database) | `go test ./internal/...` |
+| Run in the background | `Start-Process .\bin\smart-transit.exe -RedirectStandardOutput bin\server.log -WindowStyle Hidden -PassThru` |
+| Stop a background server | `Get-Process smart-transit \| Stop-Process` |
+
+> After editing anything in `web/static/`, **rebuild** the server (the pages
+> are embedded into the .exe) and press **Ctrl + F5** in the browser.
+
+### Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| `go` or `psql` is not recognized | Open a new terminal after installing. `psql` lives in `C:\Program Files\PostgreSQL\18\bin`. |
+| `DATABASE_URL is required` | `.env` is missing, or you started the server outside the project folder. |
+| `password authentication failed` | The password in `DATABASE_URL` doesn't match the one in `CREATE ROLE`. |
+| `connection refused` on port 5432 | PostgreSQL isn't running: `Get-Service postgresql*`, then `Start-Service postgresql-x64-18`. |
+| `bind: Only one usage of each socket address` | Port 8080 is busy. Stop the other server (`Get-Process smart-transit \| Stop-Process`) or set `HTTP_ADDR=:8081`. |
+| `The process cannot access the file` when building | The old server is still running from `bin\`. Stop it first. |
+| Map is grey or shows "Access denied" | Internet is needed for OpenStreetMap tiles. Press **Ctrl + F5** to clear cached tiles. |
+| Page looks old after an update | Rebuild the server, then press **Ctrl + F5**. |
+| Operator login fails | Check `OPERATOR_EMAIL` / `OPERATOR_PASSWORD` in `.env`. The account is created only once, so changing the password in `.env` later does not update it. Use a new `OPERATOR_EMAIL` to create a fresh account. |
+| Importer: `database already has routes` | Add `-replace` (it replaces demo routes and related demo data; users are kept). |
+| Importer can't reach opendata.az | Download the three files in a browser and use the local-file flags. |
+| Integration tests show `skipped` | Set `TEST_DATABASE_URL` in `.env`. The database name must end in `_test`, and it is wiped on each run. |
+| No buses on a route | Simulated buses run on the 10 busiest routes (62, 5, 14, 88, 2, 3, 7A, 6, 49, 46). Change this with `-simulate N` when importing. |
 
 ## Real open data from opendata.az
 
@@ -125,12 +262,12 @@ The production rule is 10 minutes. For a quick demo you may shorten it
 changed value):
 
 ```powershell
-$env:ALERT_SUSTAIN = "2m"; .\bin\smart-transit.exe       # terminal 1
-.\scripts\demo.ps1 -Route route_d1 -Minutes 3 -Recover    # terminal 2
+$env:ALERT_SUSTAIN = "2m"; .\bin\smart-transit.exe    # terminal 1
+.\scripts\demo.ps1 -Minutes 3 -Recover                 # terminal 2 (route 62, or pick one with -Route bb_5)
 ```
 
 The script plays several anonymous passengers who keep reporting HIGH. Watch
-the operator dashboard: D1 turns HIGH, its timer runs, exactly one alert
+the operator dashboard: the route turns HIGH, its timer runs, exactly one alert
 appears with the spare-bus recommendation, and with `-Recover` the alert is
 flagged "ready for review" after LOW reports (it is never auto-resolved). For
 the real rule, omit `ALERT_SUSTAIN` and run `.\scripts\demo.ps1` (11 minutes).

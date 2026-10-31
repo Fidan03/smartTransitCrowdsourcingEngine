@@ -18,18 +18,24 @@
   and run:  .\scripts\demo.ps1 -Minutes 3
 
 .EXAMPLE
-  .\scripts\demo.ps1                       # full 10-minute rule, route D1
-  .\scripts\demo.ps1 -Route route_d2 -Minutes 3 -Recover
+  .\scripts\demo.ps1                       # full 10-minute rule; route 62 (or the first route)
+  .\scripts\demo.ps1 -Route bb_5 -Minutes 3 -Recover
 #>
 param(
     [string]$BaseUrl = "http://localhost:8080",
-    [string]$Route = "route_d1",
+    [string]$Route = "",   # default: bb_62 (real data) if present, otherwise the first route
     [double]$Minutes = 11,
     [int]$Passengers = 4,
     [switch]$Recover
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $Route) {
+    $ids = (Invoke-RestMethod "$BaseUrl/api/v1/routes").data | ForEach-Object { $_.id }
+    if (-not $ids) { throw "No routes found at $BaseUrl. Is the server running?" }
+    $Route = if ($ids -contains "bb_62") { "bb_62" } else { @($ids)[0] }
+}
 $clients = 1..$Passengers | ForEach-Object { "demo-passenger-$_-" + [guid]::NewGuid().ToString("N").Substring(0, 8) }
 
 function Send-Report([string]$clientId, [string]$level) {
