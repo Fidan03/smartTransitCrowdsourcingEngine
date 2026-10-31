@@ -132,6 +132,15 @@ func TestListRouteStopsInvalidDirection(t *testing.T) {
 	}
 }
 
+func TestReferrerPolicyAllowsMapTiles(t *testing.T) {
+	// "same-origin" or "no-referrer" would make OpenStreetMap serve
+	// "Access denied" tiles, blocking the map for passengers.
+	rec := do(t, newTestRouter(), http.MethodGet, "/healthz")
+	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
+		t.Fatalf("Referrer-Policy = %q", got)
+	}
+}
+
 func TestMethodNotAllowed(t *testing.T) {
 	rec := do(t, newTestRouter(), http.MethodPost, "/api/v1/routes")
 	if rec.Code != http.StatusMethodNotAllowed {

@@ -66,9 +66,12 @@ function badge(text, cls) {
 
 function baseMap(elementId) {
   const map = L.map(elementId).setView([40.395, 49.86], 12);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // OSM tile policy: use tile.openstreetmap.org (no a/b/c subdomains), send a
+  // Referer, and show attribution. Without a Referer, tiles say "Access denied".
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
+    referrerPolicy: "strict-origin-when-cross-origin",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
   }).addTo(map);
   return map;
 }
