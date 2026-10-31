@@ -4,9 +4,12 @@
 public-transit crowding and helping operators respond to sustained congestion.
 See [plan.md](plan.md) for the full design.
 
-> **Demo / Simulated Data:** routes D1–D3, stops, and all bus positions are
-> simulated. They are not official Baku transit routes, timetables, or live GPS.
-> Every API response carries `X-Data-Mode: SIMULATED` and the UI shows a banner.
+> **What is real and what is simulated:** after running the importer, routes,
+> stops and ridership are **real open data from [opendata.az](https://opendata.az)**
+> (AYNA and BakuBus). **Bus positions are always simulated**, because no live
+> GPS feed is published. Without the import, the app uses three fictional demo
+> routes (D1–D3). Every API response carries `X-Data-Mode: SIMULATED`, and the
+> UI shows a banner plus source credits.
 
 ## What it does
 
@@ -68,6 +71,53 @@ Recommendation to EVALUATE an additional bus (never an automatic dispatch)
    <http://localhost:8080/operator.html> (log in with `OPERATOR_EMAIL` /
    `OPERATOR_PASSWORD` from `.env`).
 
+## Real open data from opendata.az
+
+```powershell
+go run ./cmd/importer -replace     # downloads, matches and loads; then restart the server
+```
+
+| Dataset | Publisher | Licence | Used for |
+| --- | --- | --- | --- |
+| [Avtobusların hərəkət trayektoriyası](https://opendata.az/dataset/avtobuslarin-hereket-trayektoriyasi) (KMZ) | AYNA | CC0 | Real route paths (both directions) |
+| [BakuBus stop coordinates](https://opendata.az/dataset/bakubus-mmc-ye-mexsus-avtobus-marsrutlari-uzre-dayanacaqlarin-cografi-koordinatlari) (CSV) | Bakı Metropoliteni | **Not specified** | Stops (proposed "Təklif" stops excluded) |
+| [BakuBus daily passenger trips 2026](https://opendata.az/dataset/bakubus-marsrutlari-uzre-gundelik-sernisin-gedislerinin-sayi-2026) (CSV) | Bakı Metropoliteni | CC BY | Expected crowding and operator context |
+
+The importer finds the current download links through the opendata.az CKAN
+API (`admin.opendata.az`), then:
+
+1. joins each route's path pieces;
+2. splits round trips at the far terminal into direction 0 and direction 1;
+3. simplifies the paths (4 m tolerance);
+4. assigns stops to each direction by location: within 25 m of the path and
+   on the right-hand side (Azerbaijan drives on the right);
+5. loads everything in one transaction and adds simulated buses to the 10
+   busiest routes.
+
+The last import loaded 56 BakuBus routes, 1,307 stops and 15,686 days of
+ridership; 7 routes were skipped because too few stops matched. Local files
+can be used instead: `-kmz`, `-stops`, `-ridership`.
+
+> ⚠️ The stops dataset has **no licence stated by the publisher**. Confirm
+> permission (e.g. opendata@idda.az) before any public deployment. CC BY data
+> is credited in the UI footer and at `/api/v1/data-sources`.
+
+### Expected crowding (when there are not enough reports)
+
+When live reports are insufficient (`UNKNOWN`), passengers and operators see an
+**expected** level such as "likely HIGH", based on:
+
+- the **real** average ridership for this route on this weekday (BakuBus data);
+- an **assumed** typical hourly pattern (weekday peaks around 08:00 and 18:00,
+  flatter at weekends), because the open data has daily totals only;
+- network-relative cut-offs: the busiest 25% of route-hours count as HIGH and
+  the quietest 35% as LOW.
+
+Rules: the estimate is **never** stored as a report or status, **never**
+creates or resolves alerts, and is always shown with a dashed "likely …" badge
+and an "estimate" label. It measures typical route demand, not how full a
+particular bus is.
+
 ## Demo scenario (plan 16)
 
 The production rule is 10 minutes. For a quick demo you may shorten it
@@ -127,7 +177,8 @@ identifiers are stored.
 | GET | `/api/v1/routes/{id}` | Route details and geometry |
 | GET | `/api/v1/routes/{id}/stops?direction=0` | Ordered stops |
 | GET | `/api/v1/routes/{id}/vehicles` | Current buses with `FRESH`/`STALE`/`NO_DATA` |
-| GET | `/api/v1/routes/{id}/crowd-status` | Status plus evidence (counts, last report, timer) |
+| GET | `/api/v1/routes/{id}/crowd-status` | Live status plus evidence, and an `expected` estimate (display only) |
+| GET | `/api/v1/data-sources` | Imported dataset provenance and licences |
 | GET | `/api/v1/stops/{id}/arrivals?route_id=` | ETAs with confidence |
 | POST | `/api/v1/crowd-reports` | Submit `{route_id, stop_id?, vehicle_id?, crowd_level}` |
 | POST | `/api/v1/auth/login` · `/logout` | Operator session (HttpOnly, SameSite=Strict cookie) |
@@ -177,6 +228,9 @@ go test ./... -p 1
 
 ```
 cmd/api/              entry point: config, DB, migrations, workers, HTTP server
+cmd/importer/         opendata.az import (real routes, stops, ridership)
+internal/demand/      expected crowding from historical ridership (display only)
+internal/opendata/    KMZ/CSV parsing, path stitching, direction split, stop matching, DB load
 internal/alerts/      alert continuity policy, evaluation engine, lifecycle
 internal/auth/        operator accounts, bcrypt, sessions
 internal/clock/       real/fake clock for time-based rules and tests
@@ -207,3 +261,10 @@ tests/                PostgreSQL integration tests
 - Crowd reports are not ground truth; thresholds are initial defaults to tune.
 - Position history grows (~200k rows/day with the simulator); add retention
   before long-running use.
+- Stop-to-route assignment is inferred from locations (the source file has no
+  route column). Stops on parallel streets may be misassigned, and the
+  direction split assumes paths are drawn in the direction of travel.
+- The AYNA route paths are a snapshot (updated every 6 months); ridership runs
+  January–September 2026. Re-run the importer to refresh.
+- Expected crowding uses an assumed hourly pattern and route-level demand. It
+  is a hint, not a measurement.
