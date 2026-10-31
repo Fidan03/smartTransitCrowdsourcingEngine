@@ -107,10 +107,13 @@ function expectedBadge(level) {
   return el("span", { class: `crowd-badge small expected ${level}` }, `likely ${level}`);
 }
 
+// Map palette: green routes, warm orange buses (stand out on green), grey when stale.
+const MAP_COLORS = { route: "#2f7a57", stop: "#1e2a23", stopSelected: "#2f7a57" };
+
 function busStyle(freshness) {
   return freshness === "FRESH"
-    ? { radius: 9, color: "#0f5132", fillColor: "#20c06b", fillOpacity: 0.95, weight: 2, dashArray: null }
-    : { radius: 9, color: "#6c757d", fillColor: "#adb5bd", fillOpacity: 0.6, weight: 2, dashArray: "3 3" };
+    ? { radius: 9, color: "#ffffff", fillColor: "#e07b39", fillOpacity: 1, weight: 3, dashArray: null }
+    : { radius: 9, color: "#8a948e", fillColor: "#c3cac5", fillOpacity: 0.85, weight: 2, dashArray: "3 3" };
 }
 
 function busPopup(v) {

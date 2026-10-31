@@ -59,11 +59,11 @@ async function selectRoute(routeId) {
   state.stops = stops;
 
   if (route.geometry?.length) {
-    const line = L.polyline(route.geometry, { color: "#3b6fd8", weight: 5, opacity: 0.7 }).addTo(routeLayer);
+    const line = L.polyline(route.geometry, { color: MAP_COLORS.route, weight: 5, opacity: 0.75, lineCap: "round", lineJoin: "round" }).addTo(routeLayer);
     map.fitBounds(line.getBounds(), { padding: [30, 30] });
   }
   for (const s of stops) {
-    const m = L.circleMarker([s.latitude, s.longitude], { radius: 6, color: "#1d2433", fillColor: "#fff", fillOpacity: 1, weight: 2 })
+    const m = L.circleMarker([s.latitude, s.longitude], { radius: 6, color: MAP_COLORS.stop, fillColor: "#fff", fillOpacity: 1, weight: 2 })
       .bindTooltip(`${s.stop_order + 1}. ${s.name}`)
       .on("click", () => { $("stop-select").value = s.id; selectStop(s.id); })
       .addTo(routeLayer);
@@ -85,7 +85,7 @@ function selectStop(stopId) {
   $("report-stop-name").textContent = stop ? stop.name : "the selected stop";
   for (const [id, m] of stopMarkers) {
     const selected = id === stopId;
-    m.setRadius(selected ? 9 : 6).setStyle({ fillColor: selected ? "#3b6fd8" : "#fff" });
+    m.setRadius(selected ? 9 : 6).setStyle({ fillColor: selected ? MAP_COLORS.stopSelected : "#fff", weight: selected ? 3 : 2 });
   }
   $("arrivals").replaceChildren(el("li", { class: "muted" }, "Loading…"));
   refreshArrivals();

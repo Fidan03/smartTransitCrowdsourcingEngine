@@ -2,7 +2,8 @@
 // Operator dashboard (plan 5.2 / Phase 8).
 
 const REFRESH_MS = 5000;
-const ROUTE_COLORS = ["#3b6fd8", "#d8613b", "#2e9e6a", "#8b5cf6", "#c0392b"];
+// Muted, natural palette for many routes on one map.
+const ROUTE_COLORS = ["#2f7a57", "#3f7f9a", "#9a7b3f", "#7a5c8f", "#b2604a", "#5a8a3c", "#4d6b8f", "#8f6d5a"];
 
 const $ = (id) => document.getElementById(id);
 let map, routeLayer, busLayer;
@@ -46,11 +47,11 @@ async function initMap() {
     const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
     r.color = color;
     if (detail.geometry?.length) {
-      L.polyline(detail.geometry, { color, weight: 5, opacity: 0.65 }).bindTooltip(`Route ${r.route_number}`).addTo(routeLayer);
+      L.polyline(detail.geometry, { color, weight: 4, opacity: 0.6, lineCap: "round", lineJoin: "round" }).bindTooltip(`Route ${r.route_number}`).addTo(routeLayer);
       bounds.push(...detail.geometry);
     }
     for (const s of stops) {
-      L.circleMarker([s.latitude, s.longitude], { radius: 4, color: "#1d2433", fillColor: "#fff", fillOpacity: 1, weight: 1.5 })
+      L.circleMarker([s.latitude, s.longitude], { radius: 3, color: MAP_COLORS.stop, fillColor: "#fff", fillOpacity: 1, weight: 1.5 })
         .bindTooltip(s.name).addTo(routeLayer);
     }
   }));
