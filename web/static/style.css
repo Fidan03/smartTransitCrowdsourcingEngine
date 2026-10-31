@@ -1,4 +1,7 @@
 * { box-sizing: border-box; }
+/* The HTML hidden attribute must always win over display rules like
+   ".login { display: flex }"; otherwise hidden sections stay visible. */
+[hidden] { display: none !important; }
 body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1d2433; background: #f6f7f9; }
 h2 { font-size: 1rem; margin: 0 0 8px; }
 .muted { color: #6b7385; }
@@ -23,8 +26,12 @@ button.secondary { background: #fff; color: #2f5fc4; }
 button.secondary:hover { background: #eef3fd; }
 input[type=text], input[type=email], input[type=password] { font: inherit; padding: 6px 8px; border: 1px solid #c9ced6; border-radius: 6px; }
 
-/* Passenger layout */
-main { display: grid; grid-template-columns: 1fr 420px; height: calc(100vh - 100px); }
+/* Passenger layout: banner + header + map/panel filling the screen + slim footer */
+body.passenger { display: flex; flex-direction: column; height: 100vh; }
+main { display: grid; grid-template-columns: 1fr 420px; flex: 1; min-height: 0; }
+.page-footer { background: #fff; border-top: 1px solid #e3e6ea; padding: 4px 16px; font-size: 0.8rem; }
+.page-footer summary { cursor: pointer; color: #6b7385; padding: 2px 0; }
+.page-footer .sources { padding: 4px 0 6px; max-height: 25vh; overflow-y: auto; }
 #map { height: 100%; min-height: 320px; }
 .panel { padding: 12px; overflow-y: auto; background: #f6f7f9; border-left: 1px solid #e3e6ea; }
 .card { background: #fff; border: 1px solid #e3e6ea; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
@@ -117,6 +124,7 @@ th { font-weight: 600; color: #4a5162; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 800px) {
+  body.passenger { height: auto; }
   main { grid-template-columns: 1fr; height: auto; }
   #map { height: 50vh; }
   .panel { border-left: none; border-top: 1px solid #e3e6ea; }
